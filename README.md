@@ -24,7 +24,7 @@
 ## Необходимые файлы
 
 В папке проекта должны быть:
-- `model_weights.pth` — веса обученной модели (для распознавания эмоций)
+- `model_weights.pth` и `weight_10 ideal edition.pth`  — веса обученной модели (для распознавания эмоций)
 - `haarcascade_frontalface_default.xml` — файл для обнаружения лиц (каскад Хаара)
 
 
@@ -58,9 +58,4 @@ python main_app.py
 
 
 
-## Требования
 
-- Python 3.7 или выше
-- PyTorch
-- OpenCV
-- Tkinter (обычно входит в стандартную библиотеку Python)
