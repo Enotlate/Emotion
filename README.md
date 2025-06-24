@@ -1,4 +1,4 @@
-# Emotion Recognition App
+# Emotion Detector App
 
 ## Описание
 
