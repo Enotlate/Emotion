@@ -28,8 +28,10 @@ except ImportError:
     openpyxl = None
 
 
+# ----- Модель сверточной нейросети для распознавания эмоций -----
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=7):
+        # Инициализация слоев сверточной нейросети
         super(SimpleCNN, self).__init__()
 
         self.conv1 = nn.Conv2d(3, 32, kernel_size=6, padding=1)
@@ -46,6 +48,7 @@ class SimpleCNN(nn.Module):
         self.dropout = nn.Dropout(0.3)
 
     def forward(self, x):
+        # Прямой проход через сверточную сеть
         x = self.relu(self.conv1(x))
         x = self.pool(self.relu(self.conv2(x)))
 
@@ -78,6 +81,7 @@ except ImportError:
         def forward(self, x): return self.fc(torch.randn(x.size(0), 1))
 
 
+# ----- Класс потока для обработки видео/камеры и распознавания эмоций -----
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     stop_frame_signal = pyqtSignal(np.ndarray, str)
@@ -90,6 +94,7 @@ class VideoThread(QThread):
     clear_plot_signal = pyqtSignal()
 
     def __init__(self, source_type, source_path, model_path, target_emotion_idx, manual_stop_frame_mode, device):
+        # Инициализация потока обработки видео/камеры
         super().__init__()
         self.source_type = source_type
         self.source_path = source_path
@@ -109,6 +114,7 @@ class VideoThread(QThread):
         self.seek_to_msec = -1
 
     def load_resources(self):
+        # Загрузка модели, весов и каскада Хаара для обнаружения лиц
         try:
             self.model = SimpleCNN(num_classes=len(EMOTION_DICT_ENG))
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
@@ -142,6 +148,7 @@ class VideoThread(QThread):
             return False
 
     def run(self):
+        # Основной цикл обработки кадров: захват, распознавание, отправка сигналов
         if not self.load_resources():
             self.processing_finished_signal.emit(self.emotion_log)
             return
@@ -261,20 +268,25 @@ class VideoThread(QThread):
         self.processing_finished_signal.emit(self.emotion_log)
 
     def resume_processing_manual(self):
+        # Продолжить обработку после ручного стоп-кадра
         self.current_stop_frame_pending_user_action = False
 
     def pause_stream(self):
+        # Поставить поток на паузу
         self._pause_flag = True
 
     def resume_stream(self):
+        # Снять поток с паузы
         self._pause_flag = False
 
     def stop_stream(self):
+        # Остановить поток обработки
         self._run_flag = False
         self._pause_flag = False
         self.wait()
 
     def seek_video(self, msec_position):
+        # Перемотка видео на заданную позицию (мс)
         if self.source_type == "video" and self.cap:
             self.seek_to_msec = msec_position
 
@@ -282,6 +294,7 @@ class StopFrameDialog(QDialog):
     StopProcessingAction = QDialog.Accepted + 1
 
     def __init__(self, frame_np, emotion_name_ru, parent_app_ref, parent=None):
+        # Диалог для подтверждения/сохранения стоп-кадра
         super().__init__(parent)
         self.parent_app = parent_app_ref
         self.setWindowTitle(f"Обнаружен стоп-кадр: {emotion_name_ru}")
@@ -320,6 +333,7 @@ class ClickableLabel(QLabel):
         self.setCursor(Qt.PointingHandCursor)
 
     def mousePressEvent(self, event):
+        # Обработка клика по миниатюре
         if event.button() == Qt.LeftButton:
             self.leftClicked.emit(self.image_path)
         super().mousePressEvent(event)
@@ -368,7 +382,9 @@ class EnlargedThumbnailViewer(QDialog):
         super().resizeEvent(event)
         self.update_pixmap()
 
+# ----- Главное окно приложения -----
 class EmotionDetectorApp(QMainWindow):
+    # Инициализация главного окна, интерфейса и переменных
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Детектор Эмоций")
@@ -541,6 +557,7 @@ class EmotionDetectorApp(QMainWindow):
         return f"{m:02d}:{s:02d}"
 
     def init_plot(self):
+        # Инициализация графика эмоций
         self.ax_plot.clear()
         self.ax_plot.set_title("Преобладающая эмоция", fontsize=9)
         self.ax_plot.set_xlabel("Время (секунды)", fontsize=8)
@@ -556,6 +573,7 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(float, int)
     def update_plot_live(self, time_s, emotion_idx):
+        # Обновление графика эмоций в реальном времени
         self.plot_times.append(time_s)
         self.plot_emotions_idx.append(emotion_idx)
 
@@ -583,6 +601,7 @@ class EmotionDetectorApp(QMainWindow):
         self.plot_canvas.draw_idle()
 
     def populate_webcams(self):
+        # Поиск и отображение доступных веб-камер
         self.webcam_combo.clear()
         available_cameras = []
         for i in range(5):
@@ -604,6 +623,7 @@ class EmotionDetectorApp(QMainWindow):
             self.webcam_combo.setEnabled(True)
 
     def load_model(self):
+        # Загрузка весов модели из файла
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать файл модели", "", "PyTorch Model (*.pth)")
         if path:
             self.model_path = path
@@ -613,6 +633,7 @@ class EmotionDetectorApp(QMainWindow):
             self.model_path_label.setText("Модель (.pth): Не выбрана")
 
     def source_changed(self):
+        # Обработка смены источника (камера/видео)
         is_webcam = self.webcam_radio.isChecked()
         self.webcam_combo.setEnabled(is_webcam)
         self.load_video_button.setEnabled(not is_webcam)
@@ -627,12 +648,14 @@ class EmotionDetectorApp(QMainWindow):
             self.video_slider.setEnabled(self.current_video_duration_ms > 0 and not (self.video_thread and self.video_thread.isRunning()))
 
     def load_video(self):
+        # Загрузка видеофайла
         path, _ = QFileDialog.getOpenFileName(self, "Выбрать видеофайл", "", "Video Files (*.mp4 *.avi *.mkv *.mov)")
         if path:
             self.video_path = path
             self.video_path_label.setText(f"Видеофайл: ...{os.path.basename(path)[-30:]}")
 
     def start_processing(self):
+        # Запуск обработки выбранного источника (камера/видео)
         if not self.model_path:
             QMessageBox.warning(self, "Ошибка", "Пожалуйста, выберите файл модели.")
             return
@@ -697,6 +720,7 @@ class EmotionDetectorApp(QMainWindow):
         self.video_thread.start()
 
     def toggle_pause_resume(self):
+        # Переключение между паузой и воспроизведением
         if self.video_thread and self.video_thread.isRunning():
             self.is_paused = not self.is_paused
             if self.is_paused:
@@ -717,11 +741,13 @@ class EmotionDetectorApp(QMainWindow):
             self.save_all_frames_button.setEnabled(can_save_all_frames)
 
     def stop_processing(self):
+        # Остановка обработки и потоков
         if self.video_thread and self.video_thread.isRunning():
             self.live_video_label.setText("Остановка...")
             self.video_thread.stop_stream()
 
     def set_controls_enabled_on_start(self, enabled):
+        # Включение/отключение элементов управления при старте/остановке
         self.load_model_button.setEnabled(enabled)
         self.webcam_radio.setEnabled(enabled)
         self.video_file_radio.setEnabled(enabled)
@@ -766,12 +792,14 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(np.ndarray)
     def update_live_video(self, cv_img):
+        # Отображение текущего кадра в интерфейсе
         qt_img = self.convert_cv_qt(cv_img)
         scaled_pixmap = qt_img.scaled(self.live_video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.live_video_label.setPixmap(scaled_pixmap)
 
     @pyqtSlot(np.ndarray, str)
     def handle_manual_stop_frame_dialog(self, frame_np, emotion_name_ru):
+        # Диалог для ручного подтверждения стоп-кадра
         if not (self.manual_mode_checkbox.isChecked() and self.video_thread):
             return
 
@@ -795,6 +823,7 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(np.ndarray, str, str, int)
     def handle_auto_stop_frame_and_thumbnail(self, frame_np, emotion_name_ru, emotion_name_eng, timestamp_ms):
+        # Обработка автосохранения стоп-кадра и миниатюры
         if self.manual_mode_checkbox.isChecked():
             return
 
@@ -822,6 +851,7 @@ class EmotionDetectorApp(QMainWindow):
 
 
     def save_manual_frame(self, frame_np, emotion_name_ru):
+        # Сохранение стоп-кадра вручную в соответствующую папку
         base_results_dir = "results"
         os.makedirs(base_results_dir, exist_ok=True)
         emotion_idx = next((idx for idx, name in EMOTION_DICT_RU.items() if name == emotion_name_ru), None)
@@ -840,6 +870,7 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(list)
     def processing_finished(self, emotion_log_from_thread):
+        # Обработка завершения обработки видео/камеры
         self.live_video_label.setText("Обработка завершена или остановлена.")
         self.collected_emotion_data_for_report = emotion_log_from_thread
 
@@ -858,6 +889,7 @@ class EmotionDetectorApp(QMainWindow):
             QMessageBox.information(self, "Стоп-кадры", f"Собрано {len(self.collected_auto_stop_frames_data)} автоматических стоп-кадров для сохранения.")
 
     def save_all_collected_frames(self):
+        # Сохранение всех автоматически найденных стоп-кадров
         if not self.collected_auto_stop_frames_data:
             QMessageBox.information(self, "Нет кадров", "Нет собранных стоп-кадров для сохранения.")
             return
@@ -886,6 +918,7 @@ class EmotionDetectorApp(QMainWindow):
             self.save_all_frames_button.setEnabled(False)
 
     def show_error_message(self, message):
+        # Отображение ошибок пользователю
         QMessageBox.critical(self, "Ошибка в потоке обработки", message)
         self.live_video_label.setText("Ошибка. См. сообщение.")
         if self.video_thread and not self.video_thread.isRunning():
@@ -893,6 +926,7 @@ class EmotionDetectorApp(QMainWindow):
             self.processing_finished(log)
 
     def save_report_xlsx(self):
+        # Сохранение отчета по эмоциям в формате XLSX
         if not openpyxl:
             QMessageBox.warning(self, "Ошибка", "Библиотека openpyxl не установлена. Сохранение в XLSX невозможно.")
             return
@@ -936,6 +970,7 @@ class EmotionDetectorApp(QMainWindow):
                 QMessageBox.critical(self, "Ошибка сохранения отчета", f"Не удалось сохранить отчет: {e}\n{traceback.format_exc()}")
 
     def create_emotion_pie_chart(self):
+        # Создание и сохранение круговой диаграммы эмоций
         if not self.collected_emotion_data_for_report:
             QMessageBox.information(self, "Нет данных", "Нет данных для создания диаграммы.")
             return
@@ -990,11 +1025,13 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(str)
     def show_enlarged_thumbnail(self, image_path):
+        # Просмотр увеличенной миниатюры стоп-кадра
         viewer = EnlargedThumbnailViewer(image_path, self)
         viewer.exec_()
 
     @pyqtSlot(str, bool)
     def add_thumbnail(self, image_path, is_manual):
+        # Добавление миниатюры стоп-кадра в интерфейс
         if is_manual and image_path in self.manual_saved_thumb_paths:
             return
         if is_manual:
@@ -1018,6 +1055,7 @@ class EmotionDetectorApp(QMainWindow):
             self.thumbnails_scroll_area.verticalScrollBar().maximum())
 
     def clear_thumbnails(self):
+        # Очистка всех миниатюр стоп-кадров
         while self.thumbnails_layout.count():
             child = self.thumbnails_layout.takeAt(0)
             if child.widget():
@@ -1040,6 +1078,7 @@ class EmotionDetectorApp(QMainWindow):
 
 
     def convert_cv_qt(self, cv_img):
+        # Конвертация изображения OpenCV в формат Qt
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
@@ -1048,6 +1087,7 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(int)
     def set_video_duration(self, duration_ms):
+        # Установка длительности видео и обновление слайдера
         self.current_video_duration_ms = duration_ms
         if duration_ms > 0:
             self.video_slider.setRange(0, duration_ms)
@@ -1063,6 +1103,7 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot(int)
     def update_slider_position(self, current_msec_from_video):
+        # Обновление положения слайдера видео
         if not self.user_is_scrubbing and self.video_slider.isEnabled():
             self.video_slider.setValue(current_msec_from_video)
         current_time_str = self.format_ms_to_time(current_msec_from_video)
@@ -1070,13 +1111,16 @@ class EmotionDetectorApp(QMainWindow):
 
     @pyqtSlot()
     def handle_clear_plot_request(self):
+        # Очистка графика эмоций
         self.init_plot()
 
     def slider_pressed(self):
+        # Обработка начала перемотки видео слайдером
         if self.video_file_radio.isChecked() and self.video_thread and self.video_thread.isRunning():
             self.user_is_scrubbing = True
 
     def slider_released(self):
+        # Обработка окончания перемотки видео слайдером
         if self.user_is_scrubbing:
             self.user_is_scrubbing = False
             if self.video_thread and self.video_thread.isRunning() and self.video_file_radio.isChecked():
@@ -1084,10 +1128,12 @@ class EmotionDetectorApp(QMainWindow):
                 self.video_thread.seek_video(new_position_msec)
 
     def update_time_label_from_slider(self, value_ms):
+        # Обновление времени при перемещении слайдера
         current_time_str = self.format_ms_to_time(value_ms)
         self.time_display_label.setText(f"{current_time_str} / {self.total_duration_str}")
 
     def closeEvent(self, event):
+        # Очистка ресурсов и временных файлов при закрытии приложения
         if self.video_thread and self.video_thread.isRunning():
             self.video_thread.stop_stream()
         if os.path.exists(self.temp_auto_thumbs_dir):
@@ -1097,6 +1143,7 @@ class EmotionDetectorApp(QMainWindow):
                 print(f"Error removing temp directory on close: {e}")
         event.accept()
 
+# ----- Точка входа -----
 if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     haar_file = 'haarcascade_frontalface_default.xml'
